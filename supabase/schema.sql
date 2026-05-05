@@ -16,6 +16,7 @@ CREATE TABLE drafts (
   platform TEXT,
   post_length TEXT,
   status TEXT DEFAULT 'draft',
+  metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

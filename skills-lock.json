@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "content-engine": {
+      "source": "affaan-m/everything-claude-code",
+      "sourceType": "github",
+      "skillPath": "skills/content-engine/SKILL.md",
+      "computedHash": "7076fb011546c67d93325534e33d5f5d4736cb08c16d6d10d22faf4e2f465ee9"
+    },
+    "content-writer": {
+      "source": "Shubhamsaboo/awesome-llm-apps",
+      "sourceType": "github",
+      "skillPath": "awesome_agent_skills/self-improving-agent-skills/example_skills/content-writer/SKILL.md",
+      "computedHash": "fbb4ae81ec7af17ce38f1d11ca2bc48450c89a7cd02439ea69f02dbe1cb6df4c"
+    }
+  }
+}

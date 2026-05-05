@@ -6,6 +6,27 @@ export type PostType = 'promotional' | 'educational' | 'storytelling' | 'engagem
 
 export type DraftStatus = 'draft' | 'published'
 
+export type WorkflowStepId =
+  | 'outline'
+  | 'image_idea'
+  | 'content_generation'
+  | 'image_generation'
+  | 'save'
+
+export type WorkflowStepStatus = 'idle' | 'loading' | 'success' | 'error'
+
+export interface WorkflowImageOption {
+  id: string
+  prompt: string
+}
+
+export interface WorkflowMetadata {
+  outline?: string
+  imageIdea?: string
+  imageOptions?: WorkflowImageOption[]
+  skillVersion?: string
+}
+
 export interface Profile {
   id: string
   brand_name: string | null
@@ -22,6 +43,7 @@ export interface Draft {
   platform: Platform
   post_length: PostLength
   status: DraftStatus
+  metadata?: WorkflowMetadata | null
   created_at: string
 }
 
@@ -30,4 +52,5 @@ export interface GenerateRequest {
   platform: Platform
   postLength: PostLength
   postType: PostType
+  useIcons?: boolean
 }
