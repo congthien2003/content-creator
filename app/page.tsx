@@ -35,6 +35,7 @@ import {
 
 type WizardPage = 1 | 2 | 3
 type PreviewMode = 'all' | 'outline' | 'image_idea' | 'content_generation' | 'image_generation'
+type PreviewStepId = Exclude<PreviewMode, 'all'>
 
 type WorkflowStepState = { status: WorkflowStepStatus; error?: string | null }
 type WorkflowState = Record<WorkflowStepId, WorkflowStepState>
@@ -326,11 +327,11 @@ export default function GeneratorPage() {
     onRun,
     canRun,
     preview,
-  }: {
-    id: WorkflowStepId
-    title: string
-    description: string
-    onRun: () => Promise<void>
+	  }: {
+	    id: PreviewStepId
+	    title: string
+	    description: string
+	    onRun: () => Promise<void>
     canRun: boolean
     preview?: string
   }) => (
