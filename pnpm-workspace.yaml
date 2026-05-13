@@ -1,0 +1,4 @@
+allowBuilds:
+  '@openrouter/sdk': true
+  sharp: false
+  unrs-resolver: false
