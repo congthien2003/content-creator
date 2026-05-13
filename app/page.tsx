@@ -3,6 +3,9 @@
 import { useMemo, useReducer, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { PLATFORMS, POST_LENGTHS, POST_TYPES } from '@/lib/constants'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { Components } from 'react-markdown'
 import type {
   Platform,
   PostLength,
@@ -34,8 +37,8 @@ import {
 } from 'lucide-react'
 
 type WizardPage = 1 | 2 | 3
-type PreviewMode = 'all' | 'outline' | 'image_idea' | 'content_generation' | 'image_generation'
-type PreviewStepId = Exclude<PreviewMode, 'all'>
+type PreviewPanelMode = 'step' | 'output'
+type PreviewStepId = 'outline' | 'image_idea' | 'content_generation' | 'image_generation'
 
 type WorkflowStepState = { status: WorkflowStepStatus; error?: string | null }
 type WorkflowState = Record<WorkflowStepId, WorkflowStepState>
@@ -86,6 +89,47 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
   return state
 }
 
+const markdownComponents: Components = {
+  h1: ({ children }) => <h1 className="text-xl font-bold tracking-tight mt-5 first:mt-0 mb-3">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-lg font-semibold tracking-tight mt-4 first:mt-0 mb-2.5">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-base font-semibold mt-3 first:mt-0 mb-2">{children}</h3>,
+  p: ({ children }) => <p className="leading-7 mb-3 last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc pl-6 space-y-1.5 mb-3">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-6 space-y-1.5 mb-3">{children}</ol>,
+  li: ({ children }) => <li className="leading-7">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  code: ({ children }) => (
+    <code className="rounded-md bg-muted px-1.5 py-0.5 text-[0.9em] font-mono text-foreground">{children}</code>
+  ),
+  pre: ({ children }) => (
+    <pre className="mb-3 overflow-x-auto rounded-xl bg-muted p-3 text-xs leading-6">{children}</pre>
+  ),
+  a: ({ children, href }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="text-primary underline underline-offset-2 hover:opacity-80"
+    >
+      {children}
+    </a>
+  ),
+}
+
+function MarkdownContent({ value, fallback }: { value: string; fallback: string }) {
+  const normalized = value.trim()
+
+  if (!normalized) {
+    return <p className="text-muted-foreground">{fallback}</p>
+  }
+
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {normalized}
+    </ReactMarkdown>
+  )
+}
+
 export default function GeneratorPage() {
   const { addToast } = useToast()
 
@@ -105,7 +149,8 @@ export default function GeneratorPage() {
 
   const [workflow, dispatch] = useReducer(workflowReducer, INITIAL_WORKFLOW)
   const [isRunningAll, setIsRunningAll] = useState(false)
-  const [previewMode, setPreviewMode] = useState<PreviewMode>('all')
+  const [previewPanelMode, setPreviewPanelMode] = useState<PreviewPanelMode>('output')
+  const [selectedPreviewStep, setSelectedPreviewStep] = useState<PreviewStepId>('outline')
 
   const activePlatform = useMemo(() => PLATFORMS.find(p => p.value === platform), [platform])
 
@@ -117,6 +162,21 @@ export default function GeneratorPage() {
 
   const canGoPage2 = !!topic.trim()
   const canGoPage3 = workflow.content_generation.status === 'success' && !!generatedContent
+
+  const selectedStepMarkdown = useMemo(() => {
+    if (selectedPreviewStep === 'outline') return outline
+    if (selectedPreviewStep === 'image_idea') return imageIdea
+    if (selectedPreviewStep === 'content_generation') return generatedContent
+    if (!imageOptions.length) return ''
+    return imageOptions.map(i => `- **Option ${i.id}**: ${i.prompt}`).join('\n')
+  }, [selectedPreviewStep, outline, imageIdea, generatedContent, imageOptions])
+
+  const selectedStepFallback = useMemo(() => {
+    if (selectedPreviewStep === 'outline') return 'Chưa có Outline.'
+    if (selectedPreviewStep === 'image_idea') return 'Chưa có Image Idea.'
+    if (selectedPreviewStep === 'content_generation') return 'Chưa có Content.'
+    return 'Chưa có Image Options.'
+  }, [selectedPreviewStep])
 
   const setStep = (step: WorkflowStepId, status: WorkflowStepStatus, error?: string | null) => {
     dispatch({ type: 'SET_STEP', step, status, error })
@@ -326,14 +386,12 @@ export default function GeneratorPage() {
     description,
     onRun,
     canRun,
-    preview,
-	  }: {
-	    id: PreviewStepId
-	    title: string
-	    description: string
-	    onRun: () => Promise<void>
+  }: {
+    id: PreviewStepId
+    title: string
+    description: string
+    onRun: () => Promise<void>
     canRun: boolean
-    preview?: string
   }) => (
     <motion.div
       layout
@@ -341,10 +399,15 @@ export default function GeneratorPage() {
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
       transition={{ duration: 0.2 }}
-      onClick={() => setPreviewMode(id)}
+      onClick={() => {
+        setSelectedPreviewStep(id)
+        setPreviewPanelMode('step')
+      }}
       className={cn(
         'rounded-2xl border bg-card p-4 shadow-sm cursor-pointer',
-        previewMode === id ? 'border-primary ring-2 ring-primary/20' : 'border-border'
+        previewPanelMode === 'step' && selectedPreviewStep === id
+          ? 'border-primary ring-2 ring-primary/20'
+          : 'border-border'
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -367,16 +430,6 @@ export default function GeneratorPage() {
           </motion.p>
         )}
       </AnimatePresence>
-
-      {preview && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mt-3 p-3 rounded-xl bg-muted/40 text-xs whitespace-pre-wrap max-h-28 overflow-auto"
-        >
-          {preview}
-        </motion.div>
-      )}
 
       <button
         onClick={onRun}
@@ -560,10 +613,10 @@ export default function GeneratorPage() {
                   {isRunningAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Run all workflow
                 </button>
 
-                <Node id="outline" title="1. Outline" description="Tạo dàn ý chính" onRun={runOutline} canRun={canRunOutline} preview={outline} />
-                <Node id="image_idea" title="2. Image Idea" description="Ý tưởng ảnh" onRun={runImageIdea} canRun={canRunImageIdea} preview={imageIdea} />
-                <Node id="content_generation" title="3. Content" description="Sinh nội dung" onRun={runContent} canRun={canRunContent} preview={generatedContent.slice(0, 220)} />
-                <Node id="image_generation" title="4. Image Options" description="3 prompt ảnh" onRun={runImageOptions} canRun={canRunImages} preview={imageOptions.map(i => `#${i.id}: ${i.prompt}`).join('\n\n')} />
+                <Node id="outline" title="1. Outline" description="Tạo dàn ý chính" onRun={runOutline} canRun={canRunOutline} />
+                <Node id="image_idea" title="2. Image Idea" description="Ý tưởng ảnh" onRun={runImageIdea} canRun={canRunImageIdea} />
+                <Node id="content_generation" title="3. Content" description="Sinh nội dung" onRun={runContent} canRun={canRunContent} />
+                <Node id="image_generation" title="4. Image Options" description="3 prompt ảnh" onRun={runImageOptions} canRun={canRunImages} />
               </div>
 
               <div className="lg:col-span-8 rounded-2xl border border-border bg-card min-h-[520px]">
@@ -571,13 +624,26 @@ export default function GeneratorPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="font-semibold">Output Preview</h2>
                     <button
-                      onClick={() => setPreviewMode('all')}
+                      onClick={() => setPreviewPanelMode('step')}
                       className={cn(
                         'px-2.5 py-1 rounded-lg text-xs font-semibold border',
-                        previewMode === 'all' ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted-foreground'
+                        previewPanelMode === 'step'
+                          ? 'border-primary text-primary bg-primary/10'
+                          : 'border-border text-muted-foreground'
                       )}
                     >
-                      Preview All
+                      Preview Step
+                    </button>
+                    <button
+                      onClick={() => setPreviewPanelMode('output')}
+                      className={cn(
+                        'px-2.5 py-1 rounded-lg text-xs font-semibold border',
+                        previewPanelMode === 'output'
+                          ? 'border-primary text-primary bg-primary/10'
+                          : 'border-border text-muted-foreground'
+                      )}
+                    >
+                      Output Content
                     </button>
                   </div>
                   <button
@@ -589,26 +655,12 @@ export default function GeneratorPage() {
                   </button>
                 </div>
 
-                <div className="p-4 text-sm whitespace-pre-wrap">
-                  {previewMode === 'all' && (
-                    [
-                      outline ? `# Outline\n${outline}` : '',
-                      imageIdea ? `# Image Idea\n${imageIdea}` : '',
-                      generatedContent ? `# Generated Content\n${generatedContent}` : '',
-                      imageOptions.length
-                        ? `# Image Options\n${imageOptions.map(i => `- [${i.id}] ${i.prompt}`).join('\n')}`
-                        : '',
-                    ]
-                      .filter(Boolean)
-                      .join('\n\n') || 'Chưa có output để preview.'
+                <div className="p-4 text-sm">
+                  {previewPanelMode === 'step' ? (
+                    <MarkdownContent value={selectedStepMarkdown} fallback={selectedStepFallback} />
+                  ) : (
+                    <MarkdownContent value={generatedContent} fallback="Chưa có Output Content." />
                   )}
-
-                  {previewMode === 'outline' && (outline || 'Chưa có Outline.')}
-                  {previewMode === 'image_idea' && (imageIdea || 'Chưa có Image Idea.')}
-                  {previewMode === 'content_generation' && (generatedContent || 'Chưa có Content.')}
-                  {previewMode === 'image_generation' && (imageOptions.length
-                    ? imageOptions.map(i => `- [${i.id}] ${i.prompt}`).join('\n')
-                    : 'Chưa có Image Options.')}
                 </div>
               </div>
             </div>
@@ -643,7 +695,9 @@ export default function GeneratorPage() {
                     <Copy className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="p-4 text-sm whitespace-pre-wrap max-h-[460px] overflow-auto">{generatedContent}</div>
+                <div className="p-4 text-sm max-h-[460px] overflow-auto">
+                  <MarkdownContent value={generatedContent} fallback="Chưa có Content." />
+                </div>
               </div>
 
               <div className="lg:col-span-4 space-y-3">
