@@ -114,10 +114,6 @@ $$;
 CREATE INDEX IF NOT EXISTS credit_transactions_user_created_idx
   ON credit_transactions(user_id, created_at DESC);
 
-CREATE UNIQUE INDEX IF NOT EXISTS credit_transactions_initial_grant_user_idx
-  ON credit_transactions(user_id)
-  WHERE type = 'initial_grant';
-
 CREATE INDEX IF NOT EXISTS workflows_user_created_idx
   ON workflows(user_id, created_at DESC);
 
@@ -287,8 +283,7 @@ BEGIN
       current_balance,
       'Initial signup credit grant',
       p_user_id
-    )
-    ON CONFLICT (user_id) WHERE type = 'initial_grant' DO NOTHING;
+    );
   END IF;
 END;
 $$;
