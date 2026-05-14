@@ -1,25 +1,3 @@
--- Create profiles table
-CREATE TABLE profiles (
-  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-  brand_name TEXT,
-  brand_voice TEXT,
-  core_context TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create drafts table
-CREATE TABLE drafts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
-  topic TEXT NOT NULL,
-  content TEXT,
-  platform TEXT,
-  post_length TEXT,
-  status TEXT DEFAULT 'draft',
-  metadata JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS name TEXT,
   ADD COLUMN IF NOT EXISTS email TEXT,
@@ -28,18 +6,6 @@ ALTER TABLE profiles
 
 ALTER TABLE profiles
   ADD CONSTRAINT profiles_role_check CHECK (role IN ('user', 'admin'));
-
--- Enable RLS
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE drafts ENABLE ROW LEVEL SECURITY;
-
--- Profiles Policies
-CREATE POLICY "Users can view own profile." ON profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile." ON profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Users can insert own profile." ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
-
--- Drafts Policies
-CREATE POLICY "Users can CRUD own drafts." ON drafts FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 CREATE TABLE IF NOT EXISTS credit_accounts (
   user_id UUID PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
@@ -61,9 +27,6 @@ CREATE TABLE IF NOT EXISTS workflows (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT workflows_status_check CHECK (status IN ('active', 'completed', 'failed'))
 );
-
-ALTER TABLE drafts
-  ADD COLUMN IF NOT EXISTS workflow_id UUID REFERENCES workflows(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS workflow_steps (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -107,6 +70,9 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
 ALTER TABLE workflow_steps
   ADD CONSTRAINT workflow_steps_credit_transaction_fk
   FOREIGN KEY (credit_transaction_id) REFERENCES credit_transactions(id) ON DELETE SET NULL;
+
+ALTER TABLE drafts
+  ADD COLUMN IF NOT EXISTS workflow_id UUID REFERENCES workflows(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS credit_transactions_user_created_idx
   ON credit_transactions(user_id, created_at DESC);
