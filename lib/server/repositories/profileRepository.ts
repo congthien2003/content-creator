@@ -5,9 +5,9 @@ export async function getProfileById(supabase: SupabaseClient, userId: string) {
     .from('profiles')
     .select('*')
     .eq('id', userId)
-    .single()
+    .maybeSingle()
 
-  if (error && error.code !== 'PGRST116') {
+  if (error) {
     throw new Error(error.message)
   }
 
@@ -19,13 +19,18 @@ export async function upsertProfileFromUser(supabase: SupabaseClient, user: User
   const name = typeof metadata.name === 'string' ? metadata.name : null
   const phone = typeof metadata.phone === 'string' ? metadata.phone : null
 
-  const { error } = await supabase.from('profiles').upsert({
-    id: user.id,
-    name,
-    email: user.email ?? null,
-    phone,
-    role: 'user',
-  })
+  const { error } = await supabase
+    .from('profiles')
+    .upsert(
+      {
+        id: user.id,
+        name,
+        email: user.email ?? null,
+        phone,
+        role: 'user',
+      },
+      { onConflict: 'id', ignoreDuplicates: true }
+    )
 
   if (error) {
     throw new Error(error.message)
