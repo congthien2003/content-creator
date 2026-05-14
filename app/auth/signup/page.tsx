@@ -1,7 +1,13 @@
 import Link from 'next/link'
 import { signUp } from '../actions'
 
-export default function SignupPage() {
+type SignupPageProps = {
+  searchParams: Promise<{ error?: string }>
+}
+
+export default async function SignupPage({ searchParams }: SignupPageProps) {
+  const { error } = await searchParams
+
   return (
     <div className="min-h-screen p-6 lg:p-10 flex items-center justify-center">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm">
@@ -9,6 +15,12 @@ export default function SignupPage() {
         <p className="mt-2 text-sm text-muted-foreground">
           Tạo tài khoản để lưu draft và quản lý bài viết.
         </p>
+
+        {error && (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
         <form action={signUp} className="mt-6 space-y-4">
           <div>
