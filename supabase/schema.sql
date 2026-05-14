@@ -7,6 +7,15 @@ CREATE TABLE profiles (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS name TEXT,
+  ADD COLUMN IF NOT EXISTS email TEXT,
+  ADD COLUMN IF NOT EXISTS phone TEXT,
+  ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
+
+ALTER TABLE profiles
+  ADD CONSTRAINT profiles_role_check CHECK (role IN ('user', 'admin'));
+
 -- Create drafts table
 CREATE TABLE drafts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -20,14 +29,8 @@ CREATE TABLE drafts (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-ALTER TABLE profiles
-  ADD COLUMN IF NOT EXISTS name TEXT,
-  ADD COLUMN IF NOT EXISTS email TEXT,
-  ADD COLUMN IF NOT EXISTS phone TEXT,
-  ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
-
-ALTER TABLE profiles
-  ADD CONSTRAINT profiles_role_check CHECK (role IN ('user', 'admin'));
+ALTER TABLE drafts
+  ADD COLUMN IF NOT EXISTS workflow_id UUID;
 
 -- Enable RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
@@ -63,7 +66,8 @@ CREATE TABLE IF NOT EXISTS workflows (
 );
 
 ALTER TABLE drafts
-  ADD COLUMN IF NOT EXISTS workflow_id UUID REFERENCES workflows(id) ON DELETE SET NULL;
+  ADD CONSTRAINT drafts_workflow_id_fkey
+  FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS workflow_steps (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
