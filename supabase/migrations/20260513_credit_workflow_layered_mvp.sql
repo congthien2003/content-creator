@@ -252,6 +252,10 @@ AS $$
 DECLARE
   current_balance NUMERIC(12, 2);
 BEGIN
+  IF auth.uid() IS DISTINCT FROM p_user_id THEN
+    RAISE EXCEPTION 'unauthorized_credit_account_initialization';
+  END IF;
+
   INSERT INTO credit_accounts (user_id, balance)
   VALUES (p_user_id, p_amount)
   ON CONFLICT (user_id) DO NOTHING;
