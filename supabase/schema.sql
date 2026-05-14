@@ -13,8 +13,19 @@ ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS phone TEXT,
   ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
 
-ALTER TABLE profiles
-  ADD CONSTRAINT profiles_role_check CHECK (role IN ('user', 'admin'));
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'profiles_role_check'
+      AND conrelid = 'public.profiles'::regclass
+  ) THEN
+    ALTER TABLE profiles
+      ADD CONSTRAINT profiles_role_check CHECK (role IN ('user', 'admin'));
+  END IF;
+END;
+$$;
 
 -- Create drafts table
 CREATE TABLE drafts (
@@ -65,9 +76,20 @@ CREATE TABLE IF NOT EXISTS workflows (
   CONSTRAINT workflows_status_check CHECK (status IN ('active', 'completed', 'failed'))
 );
 
-ALTER TABLE drafts
-  ADD CONSTRAINT drafts_workflow_id_fkey
-  FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'drafts_workflow_id_fkey'
+      AND conrelid = 'public.drafts'::regclass
+  ) THEN
+    ALTER TABLE drafts
+      ADD CONSTRAINT drafts_workflow_id_fkey
+      FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE SET NULL;
+  END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS workflow_steps (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -108,9 +130,20 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
   CONSTRAINT credit_transactions_amount_nonzero CHECK (amount <> 0)
 );
 
-ALTER TABLE workflow_steps
-  ADD CONSTRAINT workflow_steps_credit_transaction_fk
-  FOREIGN KEY (credit_transaction_id) REFERENCES credit_transactions(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'workflow_steps_credit_transaction_fk'
+      AND conrelid = 'public.workflow_steps'::regclass
+  ) THEN
+    ALTER TABLE workflow_steps
+      ADD CONSTRAINT workflow_steps_credit_transaction_fk
+      FOREIGN KEY (credit_transaction_id) REFERENCES credit_transactions(id) ON DELETE SET NULL;
+  END IF;
+END;
+$$;
 
 CREATE INDEX IF NOT EXISTS credit_transactions_user_created_idx
   ON credit_transactions(user_id, created_at DESC);
@@ -129,36 +162,120 @@ ALTER TABLE credit_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workflows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workflow_steps ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own credit account."
-  ON credit_accounts
-  FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'credit_accounts'
+      AND policyname = 'Users can view own credit account.'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "Users can view own credit account."
+        ON credit_accounts
+        FOR SELECT
+        USING (auth.uid() = user_id)
+    $policy$;
+  END IF;
+END;
+$$;
 
-CREATE POLICY "Users can view own credit transactions."
-  ON credit_transactions
-  FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'credit_transactions'
+      AND policyname = 'Users can view own credit transactions.'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "Users can view own credit transactions."
+        ON credit_transactions
+        FOR SELECT
+        USING (auth.uid() = user_id)
+    $policy$;
+  END IF;
+END;
+$$;
 
-CREATE POLICY "Users can view own workflows."
-  ON workflows
-  FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'workflows'
+      AND policyname = 'Users can view own workflows.'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "Users can view own workflows."
+        ON workflows
+        FOR SELECT
+        USING (auth.uid() = user_id)
+    $policy$;
+  END IF;
+END;
+$$;
 
-CREATE POLICY "Users can insert own workflows."
-  ON workflows
-  FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'workflows'
+      AND policyname = 'Users can insert own workflows.'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "Users can insert own workflows."
+        ON workflows
+        FOR INSERT
+        WITH CHECK (auth.uid() = user_id)
+    $policy$;
+  END IF;
+END;
+$$;
 
-CREATE POLICY "Users can update own workflows."
-  ON workflows
-  FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'workflows'
+      AND policyname = 'Users can update own workflows.'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "Users can update own workflows."
+        ON workflows
+        FOR UPDATE
+        USING (auth.uid() = user_id)
+        WITH CHECK (auth.uid() = user_id)
+    $policy$;
+  END IF;
+END;
+$$;
 
-CREATE POLICY "Users can view own workflow steps."
-  ON workflow_steps
-  FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'workflow_steps'
+      AND policyname = 'Users can view own workflow steps.'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "Users can view own workflow steps."
+        ON workflow_steps
+        FOR SELECT
+        USING (auth.uid() = user_id)
+    $policy$;
+  END IF;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION initialize_credit_account(p_user_id UUID, p_amount NUMERIC)
 RETURNS VOID
@@ -167,23 +284,14 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  current_balance NUMERIC(12, 2);
+  created_user_id UUID;
 BEGIN
   INSERT INTO credit_accounts (user_id, balance)
   VALUES (p_user_id, p_amount)
-  ON CONFLICT (user_id) DO NOTHING;
+  ON CONFLICT (user_id) DO NOTHING
+  RETURNING user_id INTO created_user_id;
 
-  SELECT balance
-  INTO current_balance
-  FROM credit_accounts
-  WHERE user_id = p_user_id;
-
-  IF NOT EXISTS (
-    SELECT 1
-    FROM credit_transactions
-    WHERE user_id = p_user_id
-      AND type = 'initial_grant'
-  ) THEN
+  IF created_user_id IS NOT NULL THEN
     INSERT INTO credit_transactions (
       user_id,
       type,
@@ -196,7 +304,7 @@ BEGIN
       p_user_id,
       'initial_grant',
       p_amount,
-      current_balance,
+      p_amount,
       'Initial signup credit grant',
       p_user_id
     );
