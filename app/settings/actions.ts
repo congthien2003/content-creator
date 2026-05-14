@@ -1,43 +1,40 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
+import { getCurrentUser } from '@/lib/server/auth/currentUser'
+import { getProfileById, updateProfile } from '@/lib/server/repositories/profileRepository'
+import { ensureUserAccount } from '@/lib/server/services/accountService'
 
 export async function getProfile() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const { supabase, user } = await getCurrentUser()
   if (!user) return null
 
-  const { data } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  return data
+  await ensureUserAccount(supabase, user)
+  return getProfileById(supabase, user.id)
 }
 
 export async function upsertProfile(formData: {
+  name?: string
+  email?: string
+  phone?: string
   brand_name: string
   brand_voice: string
   core_context: string
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { supabase, user, error } = await getCurrentUser()
+  if (!user) return { success: false, error }
 
-  if (!user) return { success: false, error: 'Chưa đăng nhập' }
+  await ensureUserAccount(supabase, user)
+  const profile = await getProfileById(supabase, user.id)
 
-  const { error } = await supabase.from('profiles').upsert({
-    id: user.id,
+  await updateProfile(supabase, {
+    userId: user.id,
+    name: formData.name ?? profile?.name ?? '',
+    email: formData.email ?? profile?.email ?? user.email ?? '',
+    phone: formData.phone ?? profile?.phone ?? '',
     brand_name: formData.brand_name,
     brand_voice: formData.brand_voice,
     core_context: formData.core_context,
   })
 
-  if (error) return { success: false, error: error.message }
   return { success: true }
 }
