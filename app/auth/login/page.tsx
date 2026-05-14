@@ -2,12 +2,6 @@ import Link from 'next/link'
 import { signIn } from '../actions'
 
 export default function LoginPage() {
-  async function login(formData: FormData) {
-    'use server'
-
-    await signIn(formData)
-  }
-
   return (
     <div className="min-h-screen p-6 lg:p-10 flex items-center justify-center">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm">
@@ -16,7 +10,7 @@ export default function LoginPage() {
           Đăng nhập để tiếp tục tạo và quản lý nội dung.
         </p>
 
-        <form action={login} className="mt-6 space-y-4">
+        <form action={signIn} className="mt-6 space-y-4">
           <div>
             <label htmlFor="email" className="text-xs font-bold">
               Email
