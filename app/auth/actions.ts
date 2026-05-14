@@ -23,7 +23,7 @@ export async function signUp(formData: FormData) {
   const password = String(formData.get('password') || '')
   const supabase = await createClient()
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -33,6 +33,12 @@ export async function signUp(formData: FormData) {
 
   if (error) {
     redirect(`/auth/signup?error=${encodeURIComponent(error.message)}`)
+  }
+
+  if (!data.session) {
+    redirect(
+      `/auth/login?message=${encodeURIComponent('Vui lòng kiểm tra email để xác nhận tài khoản.')}`
+    )
   }
 
   redirect('/')

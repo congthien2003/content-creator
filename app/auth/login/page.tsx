@@ -2,11 +2,11 @@ import Link from 'next/link'
 import { signIn } from '../actions'
 
 type LoginPageProps = {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; message?: string }>
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { error } = await searchParams
+  const { error, message } = await searchParams
 
   return (
     <div className="min-h-screen p-6 lg:p-10 flex items-center justify-center">
@@ -17,8 +17,17 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </p>
 
         {error && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+          >
             {error}
+          </div>
+        )}
+
+        {message && (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+            {message}
           </div>
         )}
 
@@ -31,6 +40,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               id="email"
               name="email"
               type="email"
+              autoComplete="email"
               required
               className="mt-1 w-full rounded-xl border border-border p-3 text-sm"
             />
@@ -44,6 +54,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               id="password"
               name="password"
               type="password"
+              autoComplete="current-password"
               required
               className="mt-1 w-full rounded-xl border border-border p-3 text-sm"
             />

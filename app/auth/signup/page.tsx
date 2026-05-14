@@ -17,7 +17,10 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
         </p>
 
         {error && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+          >
             {error}
           </div>
         )}
@@ -31,6 +34,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
               id="name"
               name="name"
               type="text"
+              autoComplete="name"
               required
               className="mt-1 w-full rounded-xl border border-border p-3 text-sm"
             />
@@ -44,6 +48,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
               id="phone"
               name="phone"
               type="tel"
+              autoComplete="tel"
               required
               className="mt-1 w-full rounded-xl border border-border p-3 text-sm"
             />
@@ -57,6 +62,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
               id="email"
               name="email"
               type="email"
+              autoComplete="email"
               required
               className="mt-1 w-full rounded-xl border border-border p-3 text-sm"
             />
@@ -70,6 +76,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
               id="password"
               name="password"
               type="password"
+              autoComplete="new-password"
               required
               className="mt-1 w-full rounded-xl border border-border p-3 text-sm"
             />
