@@ -114,6 +114,10 @@ $$;
 CREATE INDEX IF NOT EXISTS credit_transactions_user_created_idx
   ON credit_transactions(user_id, created_at DESC);
 
+CREATE UNIQUE INDEX IF NOT EXISTS credit_transactions_initial_grant_user_idx
+  ON credit_transactions(user_id)
+  WHERE type = 'initial_grant';
+
 CREATE INDEX IF NOT EXISTS workflows_user_created_idx
   ON workflows(user_id, created_at DESC);
 
@@ -250,14 +254,24 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  created_user_id UUID;
+  current_balance NUMERIC(12, 2);
 BEGIN
   INSERT INTO credit_accounts (user_id, balance)
   VALUES (p_user_id, p_amount)
-  ON CONFLICT (user_id) DO NOTHING
-  RETURNING user_id INTO created_user_id;
+  ON CONFLICT (user_id) DO NOTHING;
 
-  IF created_user_id IS NOT NULL THEN
+  SELECT balance
+  INTO current_balance
+  FROM credit_accounts
+  WHERE user_id = p_user_id
+  FOR UPDATE;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM credit_transactions
+    WHERE user_id = p_user_id
+      AND type = 'initial_grant'
+  ) THEN
     INSERT INTO credit_transactions (
       user_id,
       type,
@@ -270,10 +284,11 @@ BEGIN
       p_user_id,
       'initial_grant',
       p_amount,
-      p_amount,
+      current_balance,
       'Initial signup credit grant',
       p_user_id
-    );
+    )
+    ON CONFLICT (user_id) WHERE type = 'initial_grant' DO NOTHING;
   END IF;
 END;
 $$;
