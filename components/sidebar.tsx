@@ -11,6 +11,8 @@ import {
   Sparkles,
   PanelLeftClose,
   PanelLeft,
+  LogIn,
+  UserPlus,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -18,6 +20,11 @@ const NAV_ITEMS = [
   { href: '/', label: 'Tạo bài viết', icon: PenLine },
   { href: '/history', label: 'Lịch sử', icon: ClockArrowUp },
   { href: '/settings', label: 'Cài đặt', icon: Settings },
+]
+
+const AUTH_ITEMS = [
+  { href: '/auth/login', label: 'Đăng nhập', icon: LogIn },
+  { href: '/auth/signup', label: 'Tạo tài khoản', icon: UserPlus },
 ]
 
 export default function Sidebar() {
@@ -83,6 +90,32 @@ export default function Sidebar() {
           )
         })}
       </nav>
+
+      <div className="px-3 pb-3">
+        <div className="mb-2 h-px bg-white/5" />
+        <div className="flex flex-col gap-2">
+          {AUTH_ITEMS.map(({ href, label, icon: Icon }) => {
+            const isActive = pathname === href
+
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  'flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300',
+                  isActive
+                    ? 'bg-white/10 text-white'
+                    : 'text-sidebar-text hover:bg-white/5 hover:text-white'
+                )}
+                title={collapsed ? label : undefined}
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+                {!collapsed && <span className="whitespace-nowrap">{label}</span>}
+              </Link>
+            )
+          })}
+        </div>
+      </div>
 
       {/* Collapse toggle */}
       <div className="px-3 pb-6">
