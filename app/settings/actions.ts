@@ -38,7 +38,7 @@ export async function upsertProfile(formData: {
     await updateProfile(supabase, {
       userId: user.id,
       name: formData.name ?? profile?.name ?? '',
-      email: formData.email ?? profile?.email ?? user.email ?? '',
+      email: user.email ?? profile?.email ?? formData.email ?? '',
       phone: formData.phone ?? profile?.phone ?? '',
       brand_name: formData.brand_name,
       brand_voice: formData.brand_voice,

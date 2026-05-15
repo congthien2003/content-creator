@@ -35,7 +35,6 @@ export default function HistoryPage() {
 
   useEffect(() => {
     let ignore = false
-    setLoading(true)
     getDrafts(filter).then(data => {
       if (!ignore) {
         setDrafts(data)
@@ -100,7 +99,11 @@ export default function HistoryPage() {
           {filters.map(f => (
             <button
               key={f.value}
-              onClick={() => setFilter(f.value)}
+              onClick={() => {
+                if (filter === f.value) return
+                setLoading(true)
+                setFilter(f.value)
+              }}
               className={cn(
                 'flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all relative z-10',
                 filter === f.value
@@ -197,6 +200,11 @@ export default function HistoryPage() {
                       <p className="text-sm text-muted-foreground leading-relaxed">
                         {truncate(draft.content, 180)}
                       </p>
+                      {draft.workflow_id && (
+                        <p className="mt-3 break-all text-xs text-muted-foreground">
+                          Workflow ID: {draft.workflow_id}
+                        </p>
+                      )}
                     </div>
 
                     {/* Right: Actions */}

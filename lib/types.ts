@@ -29,6 +29,10 @@ export interface WorkflowMetadata {
 
 export interface Profile {
   id: string
+  name: string | null
+  email: string | null
+  phone: string | null
+  role: UserRole
   brand_name: string | null
   brand_voice: string | null
   core_context: string | null
@@ -43,6 +47,7 @@ export interface Draft {
   platform: Platform
   post_length: PostLength
   status: DraftStatus
+  workflow_id: string | null
   metadata?: WorkflowMetadata | null
   created_at: string
 }

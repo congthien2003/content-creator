@@ -131,6 +131,88 @@ function MarkdownContent({ value, fallback }: { value: string; fallback: string 
   )
 }
 
+function renderWorkflowStepBadge(status: WorkflowStepStatus) {
+  if (status === 'loading') return <Loader2 className="w-4 h-4 animate-spin text-primary" />
+  if (status === 'success') return <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+  if (status === 'error') return <RefreshCcw className="w-4 h-4 text-red-500" />
+  return <div className="w-4 h-4 rounded-full bg-muted" />
+}
+
+type WorkflowNodeCardProps = {
+  id: PreviewStepId
+  title: string
+  description: string
+  status: WorkflowStepStatus
+  error?: string | null
+  onRun: () => Promise<void>
+  canRun: boolean
+  isRunningAll: boolean
+  isSelected: boolean
+  onSelect: (id: PreviewStepId) => void
+}
+
+function WorkflowNodeCard({
+  id,
+  title,
+  description,
+  status,
+  error,
+  onRun,
+  canRun,
+  isRunningAll,
+  isSelected,
+  onSelect,
+}: WorkflowNodeCardProps) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.2 }}
+      onClick={() => onSelect(id)}
+      className={cn(
+        'rounded-2xl border bg-card p-4 shadow-sm cursor-pointer',
+        isSelected ? 'border-primary ring-2 ring-primary/20' : 'border-border'
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-sm">{title}</h3>
+          <p className="text-xs text-muted-foreground mt-1">{description}</p>
+        </div>
+        {renderWorkflowStepBadge(status)}
+      </div>
+
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            className="mt-2 text-xs text-red-500"
+          >
+            {error}
+          </motion.p>
+        )}
+      </AnimatePresence>
+
+      <button
+        onClick={onRun}
+        disabled={!canRun || status === 'loading' || isRunningAll}
+        className={cn(
+          'mt-3 w-full px-3 py-2 rounded-xl text-xs font-semibold transition',
+          !canRun || isRunningAll
+            ? 'bg-muted text-muted-foreground cursor-not-allowed'
+            : 'bg-primary text-white hover:opacity-90 active:scale-[0.99]'
+        )}
+      >
+        {status === 'error' ? 'Retry step' : 'Run step'}
+      </button>
+    </motion.div>
+  )
+}
+
 export default function GeneratorPage() {
   const { addToast } = useToast()
 
@@ -478,80 +560,6 @@ export default function GeneratorPage() {
     dispatch({ type: 'RESET' })
   }
 
-  const renderStepBadge = (step: WorkflowStepId) => {
-    const status = workflow[step].status
-    if (status === 'loading') return <Loader2 className="w-4 h-4 animate-spin text-primary" />
-    if (status === 'success') return <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-    if (status === 'error') return <RefreshCcw className="w-4 h-4 text-red-500" />
-    return <div className="w-4 h-4 rounded-full bg-muted" />
-  }
-
-  const Node = ({
-    id,
-    title,
-    description,
-    onRun,
-    canRun,
-  }: {
-    id: PreviewStepId
-    title: string
-    description: string
-    onRun: () => Promise<void>
-    canRun: boolean
-  }) => (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -2 }}
-      transition={{ duration: 0.2 }}
-      onClick={() => {
-        setSelectedPreviewStep(id)
-        setPreviewPanelMode('step')
-      }}
-      className={cn(
-        'rounded-2xl border bg-card p-4 shadow-sm cursor-pointer',
-        previewPanelMode === 'step' && selectedPreviewStep === id
-          ? 'border-primary ring-2 ring-primary/20'
-          : 'border-border'
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-sm">{title}</h3>
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        </div>
-        {renderStepBadge(id)}
-      </div>
-
-      <AnimatePresence>
-        {workflow[id].error && (
-          <motion.p
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            className="mt-2 text-xs text-red-500"
-          >
-            {workflow[id].error}
-          </motion.p>
-        )}
-      </AnimatePresence>
-
-      <button
-        onClick={onRun}
-        disabled={!canRun || workflow[id].status === 'loading' || isRunningAll}
-        className={cn(
-          'mt-3 w-full px-3 py-2 rounded-xl text-xs font-semibold transition',
-          !canRun || isRunningAll
-            ? 'bg-muted text-muted-foreground cursor-not-allowed'
-            : 'bg-primary text-white hover:opacity-90 active:scale-[0.99]'
-        )}
-      >
-        {workflow[id].status === 'error' ? 'Retry step' : 'Run step'}
-      </button>
-    </motion.div>
-  )
-
   return (
     <div className="p-6 lg:p-10 max-w-7xl mx-auto min-h-screen">
       <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -722,10 +730,66 @@ export default function GeneratorPage() {
                   {isRunningAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Run all workflow
                 </button>
 
-                <Node id="outline" title="1. Outline" description="Tạo dàn ý chính" onRun={runOutline} canRun={canRunOutline} />
-                <Node id="image_idea" title="2. Image Idea" description="Ý tưởng ảnh" onRun={runImageIdea} canRun={canRunImageIdea} />
-                <Node id="content_generation" title="3. Content" description="Sinh nội dung" onRun={runContent} canRun={canRunContent} />
-                <Node id="image_generation" title="4. Image Options" description="3 prompt ảnh" onRun={runImageOptions} canRun={canRunImages} />
+                <WorkflowNodeCard
+                  id="outline"
+                  title="1. Outline"
+                  description="Tạo dàn ý chính"
+                  status={workflow.outline.status}
+                  error={workflow.outline.error}
+                  onRun={runOutline}
+                  canRun={canRunOutline}
+                  isRunningAll={isRunningAll}
+                  isSelected={previewPanelMode === 'step' && selectedPreviewStep === 'outline'}
+                  onSelect={id => {
+                    setSelectedPreviewStep(id)
+                    setPreviewPanelMode('step')
+                  }}
+                />
+                <WorkflowNodeCard
+                  id="image_idea"
+                  title="2. Image Idea"
+                  description="Ý tưởng ảnh"
+                  status={workflow.image_idea.status}
+                  error={workflow.image_idea.error}
+                  onRun={runImageIdea}
+                  canRun={canRunImageIdea}
+                  isRunningAll={isRunningAll}
+                  isSelected={previewPanelMode === 'step' && selectedPreviewStep === 'image_idea'}
+                  onSelect={id => {
+                    setSelectedPreviewStep(id)
+                    setPreviewPanelMode('step')
+                  }}
+                />
+                <WorkflowNodeCard
+                  id="content_generation"
+                  title="3. Content"
+                  description="Sinh nội dung"
+                  status={workflow.content_generation.status}
+                  error={workflow.content_generation.error}
+                  onRun={runContent}
+                  canRun={canRunContent}
+                  isRunningAll={isRunningAll}
+                  isSelected={previewPanelMode === 'step' && selectedPreviewStep === 'content_generation'}
+                  onSelect={id => {
+                    setSelectedPreviewStep(id)
+                    setPreviewPanelMode('step')
+                  }}
+                />
+                <WorkflowNodeCard
+                  id="image_generation"
+                  title="4. Image Options"
+                  description="3 prompt ảnh"
+                  status={workflow.image_generation.status}
+                  error={workflow.image_generation.error}
+                  onRun={runImageOptions}
+                  canRun={canRunImages}
+                  isRunningAll={isRunningAll}
+                  isSelected={previewPanelMode === 'step' && selectedPreviewStep === 'image_generation'}
+                  onSelect={id => {
+                    setSelectedPreviewStep(id)
+                    setPreviewPanelMode('step')
+                  }}
+                />
               </div>
 
               <div className="lg:col-span-8 rounded-2xl border border-border bg-card min-h-[520px]">
