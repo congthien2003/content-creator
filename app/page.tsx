@@ -6,6 +6,7 @@ import { PLATFORMS, POST_LENGTHS, POST_TYPES } from '@/lib/constants'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
+import { CreditBalance } from '@/components/credit-balance'
 import type {
   Platform,
   PostLength,
@@ -144,6 +145,8 @@ export default function GeneratorPage() {
   const [imageIdea, setImageIdea] = useState('')
   const [generatedContent, setGeneratedContent] = useState('')
   const [imageOptions, setImageOptions] = useState<WorkflowImageOption[]>([])
+  const [workflowId, setWorkflowId] = useState<string | null>(null)
+  const [creditBalance, setCreditBalance] = useState<number | null>(null)
   const [draftId, setDraftId] = useState<string | null>(null)
   const [isPublished, setIsPublished] = useState(false)
 
@@ -182,20 +185,64 @@ export default function GeneratorPage() {
     dispatch({ type: 'SET_STEP', step, status, error })
   }
 
+  const syncWorkflowContext = (result: { workflowId?: string; balance?: number }) => {
+    if (result.workflowId) setWorkflowId(result.workflowId)
+    if (typeof result.balance === 'number') setCreditBalance(result.balance)
+  }
+
+  const invalidateSavedDraft = () => {
+    setDraftId(null)
+    setIsPublished(false)
+  }
+
+  const invalidateAfterOutline = () => {
+    dispatch({ type: 'RESET_DOWNSTREAM', step: 'image_idea' })
+    setImageIdea('')
+    setGeneratedContent('')
+    setImageOptions([])
+    invalidateSavedDraft()
+  }
+
+  const invalidateAfterImageIdea = () => {
+    dispatch({ type: 'RESET_DOWNSTREAM', step: 'content_generation' })
+    setGeneratedContent('')
+    setImageOptions([])
+    invalidateSavedDraft()
+  }
+
+  const invalidateAfterContent = () => {
+    dispatch({ type: 'RESET_DOWNSTREAM', step: 'save' })
+    invalidateSavedDraft()
+  }
+
+  const invalidateAfterImageOptions = () => {
+    dispatch({ type: 'RESET_DOWNSTREAM', step: 'save' })
+    invalidateSavedDraft()
+  }
+
   const resetFromOutline = () => {
     dispatch({ type: 'RESET_DOWNSTREAM', step: 'outline' })
     setOutline('')
     setImageIdea('')
     setGeneratedContent('')
     setImageOptions([])
-    setDraftId(null)
-    setIsPublished(false)
+    setWorkflowId(null)
+    invalidateSavedDraft()
   }
 
   const runOutline = async () => {
     if (!canRunOutline) return
+    invalidateAfterOutline()
     setStep('outline', 'loading')
-    const result = await generateOutline(topic)
+    const result = await generateOutline({
+      workflowId,
+      topic,
+      platform,
+      postLength,
+      postType,
+      useIcons,
+    })
+    syncWorkflowContext(result)
     if (result.success && result.data) {
       setOutline(result.data)
       setStep('outline', 'success')
@@ -208,8 +255,18 @@ export default function GeneratorPage() {
 
   const runImageIdea = async () => {
     if (!canRunImageIdea) return
+    invalidateAfterImageIdea()
     setStep('image_idea', 'loading')
-    const result = await generateImageIdea(topic, outline)
+    const result = await generateImageIdea({
+      workflowId,
+      topic,
+      platform,
+      postLength,
+      postType,
+      useIcons,
+      outline,
+    })
+    syncWorkflowContext(result)
     if (result.success && result.data) {
       setImageIdea(result.data)
       setStep('image_idea', 'success')
@@ -222,8 +279,10 @@ export default function GeneratorPage() {
 
   const runContent = async () => {
     if (!canRunContent) return
+    invalidateAfterContent()
     setStep('content_generation', 'loading')
     const result = await generateContentFromWorkflow({
+      workflowId,
       topic,
       platform,
       postLength,
@@ -232,6 +291,7 @@ export default function GeneratorPage() {
       imageIdea,
       useIcons,
     })
+    syncWorkflowContext(result)
     if (result.success && result.data) {
       setGeneratedContent(result.data)
       setStep('content_generation', 'success')
@@ -244,8 +304,18 @@ export default function GeneratorPage() {
 
   const runImageOptions = async () => {
     if (!canRunImages) return
+    invalidateAfterImageOptions()
     setStep('image_generation', 'loading')
-    const result = await generateImages3Options(topic, imageIdea)
+    const result = await generateImages3Options({
+      workflowId,
+      topic,
+      platform,
+      postLength,
+      postType,
+      useIcons,
+      imageIdea,
+    })
+    syncWorkflowContext(result)
     if (result.success && result.data) {
       setImageOptions(result.data)
       setStep('image_generation', 'success')
@@ -260,6 +330,7 @@ export default function GeneratorPage() {
     if (!canSave) return
     setStep('save', 'loading')
     const result = await saveWorkflowDraft({
+      workflowId,
       topic,
       content: generatedContent,
       platform,
@@ -283,9 +354,20 @@ export default function GeneratorPage() {
     }
 
     setIsRunningAll(true)
+    let currentWorkflowId = workflowId
+    invalidateAfterOutline()
 
     setStep('outline', 'loading')
-    const outlineResult = await generateOutline(topic)
+    const outlineResult = await generateOutline({
+      workflowId: currentWorkflowId,
+      topic,
+      platform,
+      postLength,
+      postType,
+      useIcons,
+    })
+    syncWorkflowContext(outlineResult)
+    currentWorkflowId = outlineResult.workflowId ?? currentWorkflowId
     if (!outlineResult.success || !outlineResult.data) {
       setStep('outline', 'error', outlineResult.error || 'Lỗi outline')
       addToast(outlineResult.error || 'Lỗi outline', 'error')
@@ -297,7 +379,17 @@ export default function GeneratorPage() {
     setStep('outline', 'success')
 
     setStep('image_idea', 'loading')
-    const imageIdeaResult = await generateImageIdea(topic, outlineValue)
+    const imageIdeaResult = await generateImageIdea({
+      workflowId: currentWorkflowId,
+      topic,
+      platform,
+      postLength,
+      postType,
+      useIcons,
+      outline: outlineValue,
+    })
+    syncWorkflowContext(imageIdeaResult)
+    currentWorkflowId = imageIdeaResult.workflowId ?? currentWorkflowId
     if (!imageIdeaResult.success || !imageIdeaResult.data) {
       setStep('image_idea', 'error', imageIdeaResult.error || 'Lỗi image idea')
       addToast(imageIdeaResult.error || 'Lỗi image idea', 'error')
@@ -310,6 +402,7 @@ export default function GeneratorPage() {
 
     setStep('content_generation', 'loading')
     const contentResult = await generateContentFromWorkflow({
+      workflowId: currentWorkflowId,
       topic,
       platform,
       postLength,
@@ -318,6 +411,8 @@ export default function GeneratorPage() {
       imageIdea: imageIdeaValue,
       useIcons,
     })
+    syncWorkflowContext(contentResult)
+    currentWorkflowId = contentResult.workflowId ?? currentWorkflowId
     if (!contentResult.success || !contentResult.data) {
       setStep('content_generation', 'error', contentResult.error || 'Lỗi tạo content')
       addToast(contentResult.error || 'Lỗi tạo content', 'error')
@@ -328,7 +423,16 @@ export default function GeneratorPage() {
     setStep('content_generation', 'success')
 
     setStep('image_generation', 'loading')
-    const imageOptionsResult = await generateImages3Options(topic, imageIdeaValue)
+    const imageOptionsResult = await generateImages3Options({
+      workflowId: currentWorkflowId,
+      topic,
+      platform,
+      postLength,
+      postType,
+      useIcons,
+      imageIdea: imageIdeaValue,
+    })
+    syncWorkflowContext(imageOptionsResult)
     if (!imageOptionsResult.success || !imageOptionsResult.data) {
       setStep('image_generation', 'error', imageOptionsResult.error || 'Lỗi image options')
       addToast(imageOptionsResult.error || 'Lỗi image options', 'error')
@@ -366,6 +470,8 @@ export default function GeneratorPage() {
     setImageIdea('')
     setGeneratedContent('')
     setImageOptions([])
+    setWorkflowId(null)
+    setCreditBalance(null)
     setDraftId(null)
     setIsPublished(false)
     setIsRunningAll(false)
@@ -448,9 +554,12 @@ export default function GeneratorPage() {
 
   return (
     <div className="p-6 lg:p-10 max-w-7xl mx-auto min-h-screen">
-      <div className="mb-8">
-        <h1 className="text-3xl font-extrabold tracking-tight">Workflow Content Generator</h1>
-        <p className="text-muted-foreground mt-2">Bước 1: Setup • Bước 2: Chạy workflow • Bước 3: Lưu kết quả</p>
+      <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Workflow Content Generator</h1>
+          <p className="text-muted-foreground mt-2">Bước 1: Setup • Bước 2: Chạy workflow • Bước 3: Lưu kết quả</p>
+        </div>
+        <CreditBalance balance={creditBalance} />
       </div>
 
       <div className="mb-6">
