@@ -4,6 +4,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
+import { createClient } from '@/utils/supabase/client'
+import { CreditBalance } from '@/components/credit-balance'
+import { signOut } from '@/app/auth/actions'
 import {
   PenLine,
   ClockArrowUp,
@@ -12,9 +15,11 @@ import {
   PanelLeftClose,
   PanelLeft,
   LogIn,
+  LogOut,
   UserPlus,
+  UserCircle2,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const NAV_ITEMS = [
   { href: '/', label: 'Tạo bài viết', icon: PenLine },
@@ -29,7 +34,62 @@ const AUTH_ITEMS = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const hasSupabaseEnv = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  )
   const [collapsed, setCollapsed] = useState(false)
+  const [authResolved, setAuthResolved] = useState(() => !hasSupabaseEnv)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [creditBalance, setCreditBalance] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!hasSupabaseEnv) {
+      return
+    }
+
+    const supabase = createClient()
+    let cancelled = false
+
+    const syncAuthState = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (cancelled) return
+
+      setUserEmail(user?.email ?? null)
+
+      if (!user) {
+        setCreditBalance(null)
+        setAuthResolved(true)
+        return
+      }
+
+      const { data } = await supabase
+        .from('credit_accounts')
+        .select('balance')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (cancelled) return
+
+      setCreditBalance(data ? Number(data.balance) : null)
+      setAuthResolved(true)
+    }
+
+    void syncAuthState()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      void syncAuthState()
+    })
+
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
+  }, [hasSupabaseEnv])
 
   return (
     <aside
@@ -93,28 +153,56 @@ export default function Sidebar() {
 
       <div className="px-3 pb-3">
         <div className="mb-2 h-px bg-white/5" />
-        <div className="flex flex-col gap-2">
-          {AUTH_ITEMS.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href
+        {authResolved && userEmail ? (
+          <div className="flex flex-col gap-2">
+            {!collapsed && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-white/70">
+                  <UserCircle2 className="w-3.5 h-3.5" />
+                  Tài khoản
+                </div>
+                <p className="mt-2 truncate text-sm font-semibold text-white">{userEmail}</p>
+                <div className="mt-3">
+                  <CreditBalance balance={creditBalance} />
+                </div>
+              </div>
+            )}
 
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  'flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300',
-                  isActive
-                    ? 'bg-white/10 text-white'
-                    : 'text-sidebar-text hover:bg-white/5 hover:text-white'
-                )}
-                title={collapsed ? label : undefined}
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-sidebar-text transition-all duration-300 hover:bg-white/5 hover:text-white"
+                title={collapsed ? 'Đăng xuất' : undefined}
               >
-                <Icon className="w-5 h-5 shrink-0" />
-                {!collapsed && <span className="whitespace-nowrap">{label}</span>}
-              </Link>
-            )
-          })}
-        </div>
+                <LogOut className="w-5 h-5 shrink-0" />
+                {!collapsed && <span className="whitespace-nowrap">Đăng xuất</span>}
+              </button>
+            </form>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {AUTH_ITEMS.map(({ href, label, icon: Icon }) => {
+              const isActive = pathname === href
+
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300',
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'text-sidebar-text hover:bg-white/5 hover:text-white'
+                  )}
+                  title={collapsed ? label : undefined}
+                >
+                  <Icon className="w-5 h-5 shrink-0" />
+                  {!collapsed && <span className="whitespace-nowrap">{label}</span>}
+                </Link>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Collapse toggle */}

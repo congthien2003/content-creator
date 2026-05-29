@@ -265,6 +265,25 @@ BEGIN
     FROM pg_policies
     WHERE schemaname = 'public'
       AND tablename = 'workflow_steps'
+      AND policyname = 'Users can insert own workflow steps.'
+  ) THEN
+    EXECUTE $policy$
+      CREATE POLICY "Users can insert own workflow steps."
+        ON workflow_steps
+        FOR INSERT
+        WITH CHECK (auth.uid() = user_id)
+    $policy$;
+  END IF;
+END;
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'workflow_steps'
       AND policyname = 'Users can view own workflow steps.'
   ) THEN
     EXECUTE $policy$
@@ -348,7 +367,21 @@ DECLARE
   next_balance NUMERIC(12, 2);
   new_step_id UUID;
   new_transaction_id UUID;
+  workflow_owner UUID;
 BEGIN
+  IF auth.uid() IS DISTINCT FROM p_user_id THEN
+    RAISE EXCEPTION 'unauthorized_workflow_charge';
+  END IF;
+
+  SELECT user_id
+  INTO workflow_owner
+  FROM workflows
+  WHERE id = p_workflow_id;
+
+  IF workflow_owner IS NULL OR workflow_owner <> p_user_id THEN
+    RAISE EXCEPTION 'workflow_not_found';
+  END IF;
+
   SELECT balance
   INTO current_balance
   FROM credit_accounts

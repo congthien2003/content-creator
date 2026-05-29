@@ -8,6 +8,7 @@ import type {
   WorkflowPersistedStepId,
 } from '@/lib/types'
 import { getCurrentUser } from '@/lib/server/auth/currentUser'
+import { getProfileById } from '@/lib/server/repositories/profileRepository'
 import {
   createWorkflow,
   getNextAttemptNumber,
@@ -18,6 +19,40 @@ import {
 import { createPayloadHash } from '@/lib/server/security/hash'
 import { ensureUserAccount } from '@/lib/server/services/accountService'
 import { assertEnoughCreditForStep } from '@/lib/server/services/creditService'
+
+const CONTENT_WRITER_SKILL = `# Content Writer
+
+You write compelling marketing copy. Follow these principles:
+
+## Voice
+- Conversational but professional
+- Active voice, present tense
+- Short sentences, short paragraphs
+
+## Structure
+- Lead with the biggest benefit
+- Use specific numbers over vague claims
+- End with a clear call-to-action
+
+## Rules
+- No jargon unless the audience expects it
+- No superlatives without proof ("best", "revolutionary")
+- Every paragraph must earn its place`
+
+const CONTENT_ENGINE_SKILL = `# Content Engine
+
+## Non-Negotiables
+1. Start from source material, not generic post formulas.
+2. Adapt the format for the platform, not the persona.
+3. One post should carry one actual claim.
+4. Specificity beats adjectives.
+5. No engagement bait unless explicitly asked.
+
+## Quality Gate
+- every draft sounds like the intended author
+- every draft contains a real claim, proof point, or concrete observation
+- no generic hype language remains
+- no fake engagement bait remains`
 
 const PLATFORM_INSTRUCTIONS: Record<Platform, string> = {
   facebook:
@@ -63,6 +98,20 @@ export interface WorkflowRunInput {
   imageIdea?: string
 }
 
+function buildKnowledgeContext(profile: {
+  brand_name?: string | null
+  brand_voice?: string | null
+  core_context?: string | null
+} | null) {
+  if (!profile) return ''
+
+  const parts: string[] = []
+  if (profile.brand_name) parts.push(`Tên thương hiệu: ${profile.brand_name}`)
+  if (profile.brand_voice) parts.push(`Văn phong: ${profile.brand_voice}`)
+  if (profile.core_context) parts.push(`Ngữ cảnh: ${profile.core_context}`)
+  return parts.join('\n')
+}
+
 function buildResolvedWorkflowInput(
   workflow: {
     id: string
@@ -104,12 +153,14 @@ async function getOrCreateWorkflow(input: WorkflowRunInput) {
         postType: input.postType,
         useIcons: input.useIcons ?? true,
       })
+  const profile = await getProfileById(supabase, user.id)
 
   return {
     supabase,
     user,
     workflow,
     resolvedInput: buildResolvedWorkflowInput(workflow, input),
+    knowledgeContext: buildKnowledgeContext(profile),
     error: null,
   }
 }
@@ -118,7 +169,7 @@ async function runChargedTextStep<T>(
   stepKey: WorkflowPersistedStepId,
   input: WorkflowRunInput,
   buildInputSnapshot: (resolvedInput: WorkflowRunInput) => Record<string, unknown>,
-  buildPrompt: (resolvedInput: WorkflowRunInput) => string,
+  buildPrompt: (resolvedInput: WorkflowRunInput, knowledgeContext: string) => string,
   toOutputSnapshot: (raw: string) => { data: T; outputSnapshot: Record<string, unknown> }
 ): Promise<WorkflowActionResult<T>> {
   try {
@@ -157,7 +208,7 @@ async function runChargedTextStep<T>(
     })
 
     try {
-      const raw = await generateText(buildPrompt(resolvedInput))
+      const raw = await generateText(buildPrompt(resolvedInput, context.knowledgeContext ?? ''))
       const { data, outputSnapshot } = toOutputSnapshot(raw)
       const outputHash = createPayloadHash({
         userId: context.user.id,
@@ -251,8 +302,32 @@ export async function runContentStep(input: WorkflowRunInput) {
     outline: resolvedInput.outline,
     imageIdea: resolvedInput.imageIdea,
     useIcons: resolvedInput.useIcons ?? true,
-  }), resolvedInput => {
-    return `Bạn là một chuyên gia viết nội dung Marketing, SEO và GEO.\n\n## Input workflow\n- Chủ đề: "${resolvedInput.topic}"\n- Dàn ý: ${resolvedInput.outline}\n- Ý tưởng hình ảnh: ${resolvedInput.imageIdea}\n- ${PLATFORM_INSTRUCTIONS[resolvedInput.platform]}\n- ${LENGTH_INSTRUCTIONS[resolvedInput.postLength]}\n- ${TYPE_INSTRUCTIONS[resolvedInput.postType]}\n- Quy tắc icon/emoji: ${resolvedInput.useIcons ? 'Được phép sử dụng icon/emoji phù hợp ngữ cảnh.' : 'Không sử dụng icon/emoji trong nội dung.'}\n\n## Output\n- Viết hoàn toàn bằng tiếng Việt tự nhiên\n- Trả về trực tiếp nội dung cuối cùng, không giải thích\n- Nếu là blog, dùng markdown heading hợp lý`
+  }), (resolvedInput, knowledgeContext) => {
+    return `Bạn là một chuyên gia viết nội dung Marketing, SEO và GEO.
+
+## Injected Skills
+${CONTENT_WRITER_SKILL}
+
+${CONTENT_ENGINE_SKILL}
+
+## Nguyên tắc SEO & GEO
+- User-first & E-E-A-T
+- Cấu trúc nội dung dễ trích dẫn bởi AI
+- Có luận điểm rõ ràng, cụ thể
+
+${knowledgeContext ? `## Thông tin thương hiệu\n${knowledgeContext}\n\n` : ''}## Input workflow
+- Chủ đề: "${resolvedInput.topic}"
+- Dàn ý: ${resolvedInput.outline}
+- Ý tưởng hình ảnh: ${resolvedInput.imageIdea}
+- ${PLATFORM_INSTRUCTIONS[resolvedInput.platform]}
+- ${LENGTH_INSTRUCTIONS[resolvedInput.postLength]}
+- ${TYPE_INSTRUCTIONS[resolvedInput.postType]}
+- Quy tắc icon/emoji: ${resolvedInput.useIcons ? 'Được phép sử dụng icon/emoji phù hợp ngữ cảnh.' : 'Không sử dụng icon/emoji trong nội dung.'}
+
+## Output
+- Viết hoàn toàn bằng tiếng Việt tự nhiên
+- Trả về trực tiếp nội dung cuối cùng, không giải thích
+- Nếu là blog, dùng markdown heading hợp lý`
   }, raw => ({
     data: raw,
     outputSnapshot: { content: raw },
